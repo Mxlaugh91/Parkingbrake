@@ -215,14 +215,12 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
 
         PlaySoundFromEntity(snd, soundName, entity, 'special_soundset', false, 0)
 
-        CreateThread(function()
-            local timeout = 100
-            while not HasSoundFinished(snd) and timeout > 0 do
-                Wait(50)
-                timeout = timeout - 1
-            end
-            ReleaseSoundId(snd)
-        end)
+        local timeout = 100
+        while not HasSoundFinished(snd) and timeout > 0 do
+            Wait(50)
+            timeout = timeout - 1
+        end
+        ReleaseSoundId(snd)
     end)
 
     -- Logic for the current driver (Notification & Monitoring)
