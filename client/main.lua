@@ -217,6 +217,7 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
 
         local timeout = 100
         while not HasSoundFinished(snd) and timeout > 0 do
+            if not DoesEntityExist(entity) then break end
             Wait(50)
             timeout = timeout - 1
         end
@@ -263,5 +264,22 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
         else
             monitorActive = false
         end
+    end
+end)
+
+-- Sync loop for streamed-in vehicles
+CreateThread(function()
+    while true do
+        local vehicles = GetGamePool('CVehicle')
+        for i = 1, #vehicles do
+            local veh = vehicles[i]
+            if DoesEntityExist(veh) then
+                local state = Entity(veh).state.parkingbrake
+                if state then
+                    SetVehicleHandbrake(veh, true)
+                end
+            end
+        end
+        Wait(2000)
     end
 end)
