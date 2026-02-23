@@ -2,16 +2,8 @@ lib.locale()
 local lastVehicle = nil
 local monitorActive = false
 local previousSeat = nil
-
--- Vehicle classes that do not support the parking brake
-local excludedClasses = {
-    [8] = true, -- Motorcycles
-    [13] = true, -- Bicycles
-    [14] = true, -- Boats
-    [15] = true, -- Helicopters
-    [16] = true, -- Planes
-    [21] = true, -- Trains
-}
+local lastToggleTime = 0
+local rollingByNetId = {}  -- guard: prevents concurrent startRollingPhysics threads per vehicle
 
 -- Returns true if the vehicle is in a state where the parking brake should be blocked or released
 local function isVehicleDisabled(veh)
@@ -28,75 +20,65 @@ end
 -- stuckTimer exits after 20s of no movement (truly stuck).
 -- hardLimit is a 3-minute absolute safety stop.
 local function startRollingPhysics(vehToRelease)
+    if not DoesEntityExist(vehToRelease) then return end
+    
+    local netId = NetworkGetNetworkIdFromEntity(vehToRelease)
+    -- Fallback for å unngå nil-index feil hvis entiteten ikke har et gyldig Network ID
+    if not netId or netId == 0 then return end 
+
+    -- Prevent two concurrent rolling threads on the same vehicle
+    if rollingByNetId[netId] then return end
+    rollingByNetId[netId] = true
+
     CreateThread(function()
+        -- Retry control request until granted or timeout (50ms * 40 = 2s max)
         if not NetworkHasControlOfEntity(vehToRelease) then
             NetworkRequestControlOfEntity(vehToRelease)
-            Wait(500)
+            local controlTimeout = 40
+            while not NetworkHasControlOfEntity(vehToRelease) and controlTimeout > 0 do
+                Wait(50)
+                controlTimeout = controlTimeout - 1
+            end
         end
 
-        -- 1. Skru av bremsene for å forhindre risting/ABS-hakking i førsteperson (Old Logic Restoration)
-        local originalBrakeForce = GetVehicleHandlingFloat(vehToRelease, 'CHandlingData', 'fBrakeForce')
-        SetVehicleHandlingFloat(vehToRelease, 'CHandlingData', 'fBrakeForce', 0.0)
-        
         local hasBeenMoving = false
         local stuckTimer = 0
-        local hardLimit  = 3600
+        local hardLimit  = Config.Physics.MaxRollTime
         
         while hardLimit > 0 and DoesEntityExist(vehToRelease) do
-            -- Drep rulle-loopen umiddelbart hvis noen setter på brekket
+            -- Exit checks first, before touching anything
             if Entity(vehToRelease).state.parkingbrake then break end
-            
-            -- If another player took control, stop immediately
             if not NetworkHasControlOfEntity(vehToRelease) then break end
-
+            if not IsVehicleSeatFree(vehToRelease, -1) then break end
             local speed = GetEntitySpeed(vehToRelease)
             local pitch = GetEntityPitch(vehToRelease)
-
-            -- Ensure brakes are physically OFF (Old Logic)
             SetVehicleHandbrake(vehToRelease, false)
             SetVehicleBrake(vehToRelease, false)
 
-            if speed > 0.6 then hasBeenMoving = true end -- Adjusted threshold from Old Logic
+            if speed > Config.Physics.MinSpeed then hasBeenMoving = true end
 
-            -- 2. Vi MÅ fortsatt dytte bilen for å overvinne GTA sitt "lim" på tomme biler!
-            if math.abs(pitch) > 0.5 and speed < 15.0 then
-                -- Extra base force when starting from rest
-                local startBoost = speed < 0.8 and 0.15 or 0.0
-                local calculatedForce = 0.18 + startBoost + (math.abs(pitch) * 0.08)
-                if calculatedForce > 0.75 then calculatedForce = 0.75 end
+            if math.abs(pitch) > Config.Physics.MinPitch and speed < 15.0 then
+                local calculatedForce = Config.Physics.BaseForce + (math.abs(pitch) * Config.Physics.PitchMultiplier)
+                if calculatedForce > Config.Physics.MaxForce then calculatedForce = Config.Physics.MaxForce end
                 local force = (pitch > 0 and -calculatedForce or calculatedForce)
                 ApplyForceToEntity(vehToRelease, 1, 0.0, force, 0.0, 0.0, 0.0, 0.0, 0, true, true, true, false, true)
             end
 
-            if not IsVehicleSeatFree(vehToRelease, -1) then break end
-            
-            -- Exit once settled on flat ground
-            if hasBeenMoving and speed < 0.6 and math.abs(pitch) < 1.0 then break end
-
-            -- FIKS: "Stuck Timer" for krasj (som når du rygger inn i en annen bil)
-            if speed < 0.8 then -- Adjusted threshold from Old Logic
+            if hasBeenMoving and speed < Config.Physics.MinSpeed and math.abs(pitch) < 1.0 then break end
+            if speed < 0.8 then 
                 stuckTimer = stuckTimer + 1
                 -- 60 iterasjoner * 50ms = 3 sekunder.
-                if stuckTimer >= 60 then break end 
+                if stuckTimer >= Config.Physics.StuckTime then break end
             else
-                -- Hvis den triller fritt, nullstiller vi timeren
                 stuckTimer = 0
             end
-
             hardLimit = hardLimit - 1
             Wait(50)
         end
 
-        -- 3. Gi tilbake bremsene når bilen stopper eller noen tar på håndbrekket (Old Logic Restoration)
-        if DoesEntityExist(vehToRelease) then
-            SetVehicleHandlingFloat(vehToRelease, 'CHandlingData', 'fBrakeForce', originalBrakeForce)
-        end
+        rollingByNetId[netId] = nil
     end)
 end
-
-CreateThread(function()
-    RequestScriptAudioBank('audiodirectory/custom_sounds', false)
-end)
 
 -- Sync state bag on entry/exit
 lib.onCache('vehicle', function(veh)
@@ -129,7 +111,7 @@ lib.onCache('vehicle', function(veh)
     -- Update reference and sync state on entry
     if veh then
         -- Skip excluded vehicle classes and ensure HUD is off
-        if excludedClasses[GetVehicleClass(veh)] then
+        if Config.ExcludedClasses[GetVehicleClass(veh)] then
             LocalPlayer.state:set('parkingbrake', false, false)
             return
         end
@@ -159,7 +141,7 @@ lib.onCache('seat', function(seat)
 
     local veh = cache.vehicle
     if not veh or not DoesEntityExist(veh) then return end
-    if excludedClasses[GetVehicleClass(veh)] then return end
+    if Config.ExcludedClasses[GetVehicleClass(veh)] then return end
     if isVehicleDisabled(veh) then return end
 
     local isOn = Entity(veh).state.parkingbrake or false
@@ -170,10 +152,15 @@ end)
 
 -- Toggle Command
 RegisterCommand('+toggleParkingbrake', function()
+    -- Cooldown check
+    local currentTime = GetGameTimer()
+    if (currentTime - lastToggleTime) < Config.CommandCooldown then return end
+    lastToggleTime = currentTime
+
     local veh = cache.vehicle
     -- Validation: Must be in vehicle and driver
     if not veh or GetPedInVehicleSeat(veh, -1) ~= cache.ped then return end
-    if excludedClasses[GetVehicleClass(veh)] then return end
+    if Config.ExcludedClasses[GetVehicleClass(veh)] then return end
 
     -- Block toggle if vehicle is in water or being towed (silent, no notification)
     if isVehicleDisabled(veh) then return end
@@ -188,11 +175,6 @@ RegisterCommand('-toggleParkingbrake', function() end, false)
 -- Register KeyMapping
 RegisterKeyMapping('+toggleParkingbrake', 'Toggle Parking Brake', 'keyboard', Config.DefaultKey)
 
-AddEventHandler('onResourceStop', function(resource)
-    if resource == GetCurrentResourceName() then
-        ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
-    end
-end)
 
 AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _reserved, replicated)
     local entity = GetEntityFromStateBagName(bagName)
@@ -206,14 +188,18 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
             Wait(250)
         end
 
-        -- Apply handbrake physically for all clients
-        SetVehicleHandbrake(entity, value)
+        -- Apply handbrake physically only for entity owner
+        if NetworkGetEntityOwner(entity) == PlayerId() then
+            SetVehicleHandbrake(entity, value)
+        end
 
         -- Play sound for nearby clients (network-synced via state bag)
+        qbx.loadAudioBank('audiodirectory/custom_sounds')
         local snd = GetSoundId()
         local soundName = value and 'handbrake_sound_pull' or 'handbrake_sound_rele'
 
         PlaySoundFromEntity(snd, soundName, entity, 'special_soundset', false, 0)
+        Wait(0)
 
         local timeout = 100
         while not HasSoundFinished(snd) and timeout > 0 do
@@ -221,6 +207,7 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
             timeout = timeout - 1
         end
         ReleaseSoundId(snd)
+        ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
     end)
 
     -- Logic for the current driver (Notification & Monitoring)
@@ -242,6 +229,11 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
                 CreateThread(function()
                     local monVeh = entity
                     while monitorActive and DoesEntityExist(monVeh) do
+                        if not DoesEntityExist(monVeh) then
+                            monitorActive = false
+                            break
+                        end
+
                         if cache.vehicle ~= monVeh then break end
                         
                         -- If brake is turned off externally, stop monitoring
