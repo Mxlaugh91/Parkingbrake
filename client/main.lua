@@ -86,6 +86,21 @@ local function handleLeavingDriverSeat(veh)
     end
 end
 
+local AUDIO_BANK = 'audiodirectory/custom_sounds'
+local isAudioLoaded = false
+
+local function updateAudioBankState()
+    local shouldBeLoaded = cache.vehicle and cache.seat == -1
+
+    if shouldBeLoaded and not isAudioLoaded then
+        qbx.loadAudioBank(AUDIO_BANK)
+        isAudioLoaded = true
+    elseif not shouldBeLoaded and isAudioLoaded then
+        ReleaseNamedScriptAudioBank(AUDIO_BANK)
+        isAudioLoaded = false
+    end
+end
+
 lib.onCache('vehicle', function(veh, oldVeh)
     if veh then
         lastVehicle = veh
@@ -99,6 +114,7 @@ lib.onCache('vehicle', function(veh, oldVeh)
         end
         lastVehicle = nil
     end
+    updateAudioBankState()
 end)
 
 lib.onCache('seat', function(seat, oldSeat)
@@ -106,6 +122,7 @@ lib.onCache('seat', function(seat, oldSeat)
     if oldSeat == -1 and seat and seat ~= -1 then
         handleLeavingDriverSeat(cache.vehicle)
     end
+    updateAudioBankState()
 end)
 
 AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _reserved, replicated)
@@ -117,13 +134,11 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
     end
 
     if entity == cache.vehicle and cache.seat == -1 then
-        qbx.loadAudioBank('audiodirectory/custom_sounds')
         qbx.playAudio({
             audioName   = value and 'handbrake_sound_pull' or 'handbrake_sound_rele',
             audioRef    = 'special_soundset',
             audioSource = entity,
         })
-        ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
 
         lib.notify({
             description = locale('info.parking_brake_' .. (value and 'on' or 'off')),
@@ -148,3 +163,11 @@ end, false)
 RegisterCommand('-toggleParkingbrake', function() end, false)
 
 RegisterKeyMapping('+toggleParkingbrake', 'Toggle Parking Brake', 'keyboard', Config.DefaultKey)
+
+AddEventHandler('onResourceStop', function(resource)
+    if resource == GetCurrentResourceName() and isAudioLoaded then
+        ReleaseNamedScriptAudioBank(AUDIO_BANK)
+    end
+end)
+
+updateAudioBankState()
