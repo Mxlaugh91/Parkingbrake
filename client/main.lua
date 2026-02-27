@@ -3,7 +3,21 @@ lib.locale()
 local lastVehicle = nil
 local lastToggleTime = 0
 local rollingByNetId = {}
+local audioLoaded = false
 
+local function updateAudioBankState(vehicle, seat)
+    if vehicle and seat == -1 then
+        if not audioLoaded then
+            qbx.loadAudioBank('audiodirectory/custom_sounds')
+            audioLoaded = true
+        end
+    else
+        if audioLoaded then
+            ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
+            audioLoaded = false
+        end
+    end
+end
 
 local function isVehicleDisabled(veh)
     if not veh or not DoesEntityExist(veh) then return true end
@@ -87,6 +101,8 @@ local function handleLeavingDriverSeat(veh)
 end
 
 lib.onCache('vehicle', function(veh, oldVeh)
+    updateAudioBankState(veh, cache.seat)
+
     if veh then
         lastVehicle = veh
 
@@ -102,6 +118,7 @@ lib.onCache('vehicle', function(veh, oldVeh)
 end)
 
 lib.onCache('seat', function(seat, oldSeat)
+    updateAudioBankState(cache.vehicle, seat)
 
     if oldSeat == -1 and seat and seat ~= -1 then
         handleLeavingDriverSeat(cache.vehicle)
@@ -117,13 +134,11 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
     end
 
     if entity == cache.vehicle and cache.seat == -1 then
-        qbx.loadAudioBank('audiodirectory/custom_sounds')
         qbx.playAudio({
             audioName   = value and 'handbrake_sound_pull' or 'handbrake_sound_rele',
             audioRef    = 'special_soundset',
             audioSource = entity,
         })
-        ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
 
         lib.notify({
             description = locale('info.parking_brake_' .. (value and 'on' or 'off')),
@@ -148,3 +163,12 @@ end, false)
 RegisterCommand('-toggleParkingbrake', function() end, false)
 
 RegisterKeyMapping('+toggleParkingbrake', 'Toggle Parking Brake', 'keyboard', Config.DefaultKey)
+
+AddEventHandler('onResourceStop', function(resource)
+    if resource == GetCurrentResourceName() and audioLoaded then
+        ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
+        audioLoaded = false
+    end
+end)
+
+updateAudioBankState(cache.vehicle, cache.seat)
