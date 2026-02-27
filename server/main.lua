@@ -1,23 +1,14 @@
 -- Server-side for qbx_parkingbrake
---
--- The previous MySQL callback 'qbx-parkingbrake:server:isOwnedVehicle'
--- was removed because SetVehicleHasBeenOwnedByPlayer() has no effect
--- on vehicle persistence in FiveM/OneSync. Persistence is handled by
--- qbx_core via SetEntityOrphanMode + statebag 'persisted'.
---
--- References:
---   https://docs.fivem.net/docs/cookbook/2020/07/10/a-quick-note-about-onesync-server-side-persistence/
---   https://forum.cfx.re/t/is-this-native-working-correctly/727247
 
--- Server-side cooldown per player (prevents spam exploit)
 local lastToggle = {}
 local COOLDOWN_MS = 800
 
+-- Using GetVehicleType/Class on server requires OneSync
 RegisterNetEvent('qbx_parkingbrake:server:toggle', function()
     local src = source
     local now = GetGameTimer()
 
-    -- Server-side rate limit — client cooldown alone is not exploit-proof
+    -- Server-side rate limit
     if lastToggle[src] and (now - lastToggle[src]) < COOLDOWN_MS then return end
     lastToggle[src] = now
 
@@ -27,12 +18,16 @@ RegisterNetEvent('qbx_parkingbrake:server:toggle', function()
     -- Validation: Is player actually the driver?
     if veh == 0 or GetPedInVehicleSeat(veh, -1) ~= ped then return end
 
+    -- Validation: Check for excluded classes
+    local vehClass = GetVehicleClass(veh)
+    if Config.ExcludedClasses[vehClass] then return end
+
     -- Toggle state
     local currentState = Entity(veh).state.parkingbrake
     Entity(veh).state:set('parkingbrake', not currentState, true)
 end)
 
--- Clean up cooldown table when a player drops to avoid memory leak
+-- Clean up cooldown table
 AddEventHandler('playerDropped', function()
     lastToggle[source] = nil
 end)
