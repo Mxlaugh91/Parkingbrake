@@ -3,6 +3,7 @@ Config = {}
 Config.DefaultKey = 'N'
 Config.NotifyType = 'inform' -- 'success', 'error', 'inform', 'warning'
 Config.CommandCooldown = 1000 -- Milliseconds between toggles to prevent spam
+Config.HoldTime = 1000 -- Milliseconds to hold the key before toggling
 
 -- Physics settings for rolling logic
 Config.Physics = {

@@ -3,20 +3,21 @@ lib.locale()
 local lastVehicle = nil
 local lastToggleTime = 0
 local rollingByNetId = {}
+local isActivelyHolding = false
 
 
 local function isVehicleDisabled(veh)
     if not veh or not DoesEntityExist(veh) then return true end
     if not Config.EnableStateChecks then return false end
-    
+
     return GetEntitySubmergedLevel(veh) >= Config.WaterThreshold or IsEntityAttached(veh)
 end
 
 local function startRollingPhysics(vehToRelease)
     if not DoesEntityExist(vehToRelease) then return end
-    
+
     local netId = NetworkGetNetworkIdFromEntity(vehToRelease)
-    if not netId or netId == 0 then return end 
+    if not netId or netId == 0 then return end
 
     if rollingByNetId[netId] then return end
     rollingByNetId[netId] = true
@@ -32,7 +33,7 @@ local function startRollingPhysics(vehToRelease)
         local hasBeenMoving = false
         local stuckTimer = 0
         local hardLimit = Config.Physics.MaxRollTime
-        
+
         while hardLimit > 0 and DoesEntityExist(vehToRelease) do
             if Entity(vehToRelease).state.parkingbrake then break end
             if not NetworkHasControlOfEntity(vehToRelease) then break end
@@ -40,7 +41,7 @@ local function startRollingPhysics(vehToRelease)
 
             local speed = GetEntitySpeed(vehToRelease)
             local pitch = GetEntityPitch(vehToRelease)
-            
+
             SetVehicleHandbrake(vehToRelease, false)
             SetVehicleBrake(vehToRelease, false)
 
@@ -54,8 +55,8 @@ local function startRollingPhysics(vehToRelease)
             end
 
             if hasBeenMoving and speed < Config.Physics.MinSpeed and math.abs(pitch) < 1.0 then break end
-            
-            if speed < 0.8 then 
+
+            if speed < 0.8 then
                 stuckTimer = stuckTimer + 1
                 if stuckTimer >= Config.Physics.StuckTime then break end
             else
@@ -76,10 +77,8 @@ local function handleLeavingDriverSeat(veh)
 
     local isOn = Entity(veh).state.parkingbrake
     if isOn then
-
         SetVehicleHandbrake(veh, true)
     else
-
         startRollingPhysics(veh)
     end
 end
@@ -87,11 +86,9 @@ end
 lib.onCache('vehicle', function(veh, oldVeh)
     if veh then
         lastVehicle = veh
-
         local state = Entity(veh).state.parkingbrake or false
         SetVehicleHandbrake(veh, state)
     else
-
         if cache.seat == -1 then
             handleLeavingDriverSeat(lastVehicle)
         end
@@ -106,6 +103,7 @@ lib.onCache('seat', function(seat, oldSeat)
     end
 end)
 
+---@diagnostic disable-next-line: param-type-mismatch
 AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _reserved, replicated)
     local entity = GetEntityFromStateBagName(bagName)
     if not entity or entity == 0 or GetEntityType(entity) ~= 2 then return end
@@ -135,15 +133,45 @@ lib.addKeybind({
     description = 'Toggle Parking Brake',
     defaultKey = Config.DefaultKey,
     onPressed = function()
+
         local currentTime = GetGameTimer()
-        if (currentTime - lastToggleTime) < Config.CommandCooldown then return end
-        lastToggleTime = currentTime
+        if (currentTime - lastToggleTime) < (Config.CommandCooldown or 1000) then return end
 
         local veh = cache.vehicle
         if not veh or cache.seat ~= -1 then return end
+        if IsPedDeadOrDying(cache.ped, true) then return end
         if Config.ExcludedClasses[GetVehicleClass(veh)] then return end
         if isVehicleDisabled(veh) then return end
 
-        TriggerServerEvent('qbx_parkingbrake:server:toggle')
+        if Config.HoldTime > 0 then
+            isActivelyHolding = true
+
+            local success = lib.progressCircle({
+                duration = Config.HoldTime,
+                position = 'bottom',
+                useWhileDead = false,
+                canCancel = true,
+                disable = {
+                    car = true,
+                }
+            })
+
+            if success then
+                lastToggleTime = GetGameTimer()
+                TriggerServerEvent('qbx_parkingbrake:server:toggle')
+            end
+
+            isActivelyHolding = false
+        else
+
+            lastToggleTime = GetGameTimer()
+            TriggerServerEvent('qbx_parkingbrake:server:toggle')
+        end
+    end,
+    onReleased = function()
+        if isActivelyHolding and Config.HoldTime > 0 then
+            lib.cancelProgress()
+            isActivelyHolding = false
+        end
     end
 })
