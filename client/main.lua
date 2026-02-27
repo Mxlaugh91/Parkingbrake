@@ -1,3 +1,4 @@
+local qbx = exports.qbx_core
 lib.locale()
 
 local lastVehicle = nil
@@ -115,13 +116,20 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
     end
 
     if entity == cache.vehicle and cache.seat == -1 then
-        qbx.loadAudioBank('audiodirectory/custom_sounds')
-        qbx.playAudio({
-            audioName   = value and 'handbrake_sound_pull' or 'handbrake_sound_rele',
-            audioRef    = 'special_soundset',
-            audioSource = entity,
-        })
-        ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
+        RequestScriptAudioBank('audiodirectory/custom_sounds', false)
+        local soundId = GetSoundId()
+        PlaySoundFromEntity(soundId, value and 'handbrake_sound_pull' or 'handbrake_sound_rele', entity, 'special_soundset', false, 0)
+
+        -- Clean up audio bank and sound ID
+        CreateThread(function()
+            local timeout = 0
+            while not HasSoundFinished(soundId) and timeout < 100 do
+                Wait(100)
+                timeout = timeout + 1
+            end
+            ReleaseSoundId(soundId)
+            ReleaseNamedScriptAudioBank('audiodirectory/custom_sounds')
+        end)
 
         lib.notify({
             description = locale('info.parking_brake_' .. (value and 'on' or 'off')),
