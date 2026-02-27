@@ -24,11 +24,9 @@ local function startRollingPhysics(vehToRelease)
     CreateThread(function()
         if not NetworkHasControlOfEntity(vehToRelease) then
             NetworkRequestControlOfEntity(vehToRelease)
-            local timeout = 40
-            while not NetworkHasControlOfEntity(vehToRelease) and timeout > 0 do
-                Wait(50)
-                timeout = timeout - 1
-            end
+            lib.waitFor(function()
+                if NetworkHasControlOfEntity(vehToRelease) then return true end
+            end, 'Could not get network control of vehicle', 2000)
         end
 
         local hasBeenMoving = false
@@ -112,7 +110,7 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
     local entity = GetEntityFromStateBagName(bagName)
     if not entity or entity == 0 or GetEntityType(entity) ~= 2 then return end
 
-    if NetworkGetEntityOwner(entity) == PlayerId() then
+    if NetworkGetEntityOwner(entity) == cache.playerId then
         SetVehicleHandbrake(entity, value)
     end
 
@@ -132,19 +130,20 @@ AddStateBagChangeHandler('parkingbrake', nil, function(bagName, key, value, _res
     end
 end)
 
-RegisterCommand('+toggleParkingbrake', function()
-    local currentTime = GetGameTimer()
-    if (currentTime - lastToggleTime) < Config.CommandCooldown then return end
-    lastToggleTime = currentTime
+lib.addKeybind({
+    name = 'toggleParkingbrake',
+    description = 'Toggle Parking Brake',
+    defaultKey = Config.DefaultKey,
+    onPressed = function()
+        local currentTime = GetGameTimer()
+        if (currentTime - lastToggleTime) < Config.CommandCooldown then return end
+        lastToggleTime = currentTime
 
-    local veh = cache.vehicle
-    if not veh or cache.seat ~= -1 then return end
-    if Config.ExcludedClasses[GetVehicleClass(veh)] then return end
-    if isVehicleDisabled(veh) then return end
+        local veh = cache.vehicle
+        if not veh or cache.seat ~= -1 then return end
+        if Config.ExcludedClasses[GetVehicleClass(veh)] then return end
+        if isVehicleDisabled(veh) then return end
 
-    TriggerServerEvent('qbx_parkingbrake:server:toggle')
-end, false)
-
-RegisterCommand('-toggleParkingbrake', function() end, false)
-
-RegisterKeyMapping('+toggleParkingbrake', 'Toggle Parking Brake', 'keyboard', Config.DefaultKey)
+        TriggerServerEvent('qbx_parkingbrake:server:toggle')
+    end
+})
