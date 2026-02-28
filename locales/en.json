@@ -2,5 +2,8 @@
     "info": {
         "parking_brake_on": "Parking brake engaged",
         "parking_brake_off": "Parking brake released"
+    },
+    "error": {
+        "vehicle_moving": "The vehicle must be completely still to use the parking brake"
     }
 }

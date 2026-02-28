@@ -1,15 +1,3 @@
--- Server-side for qbx_parkingbrake
---
--- The previous MySQL callback 'qbx-parkingbrake:server:isOwnedVehicle'
--- was removed because SetVehicleHasBeenOwnedByPlayer() has no effect
--- on vehicle persistence in FiveM/OneSync. Persistence is handled by
--- qbx_core via SetEntityOrphanMode + statebag 'persisted'.
---
--- References:
---   https://docs.fivem.net/docs/cookbook/2020/07/10/a-quick-note-about-onesync-server-side-persistence/
---   https://forum.cfx.re/t/is-this-native-working-correctly/727247
-
--- Server-side cooldown per player (prevents spam exploit)
 local lastToggle = {}
 local COOLDOWN_MS = 800
 

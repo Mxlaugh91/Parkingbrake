@@ -142,6 +142,7 @@ lib.addKeybind({
         if IsPedDeadOrDying(cache.ped, true) then return end
         if Config.ExcludedClasses[GetVehicleClass(veh)] then return end
         if isVehicleDisabled(veh) then return end
+        if GetEntitySpeed(veh) > 1 then return end
 
         if Config.HoldTime > 0 then
             isActivelyHolding = true
