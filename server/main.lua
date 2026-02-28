@@ -27,6 +27,9 @@ RegisterNetEvent('qbx_parkingbrake:server:toggle', function()
     -- Validation: Is player actually the driver?
     if veh == 0 or GetPedInVehicleSeat(veh, -1) ~= ped then return end
 
+    -- Validation: Is the vehicle class supported?
+    if Config.ExcludedClasses[GetVehicleClass(veh)] then return end
+
     -- Toggle state
     local currentState = Entity(veh).state.parkingbrake
     Entity(veh).state:set('parkingbrake', not currentState, true)
