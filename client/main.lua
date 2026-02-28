@@ -33,14 +33,18 @@ local function startRollingPhysics(vehToRelease)
         local hasBeenMoving = false
         local stuckTimer = 0
         local hardLimit = Config.Physics.MaxRollTime
+        local vehState = Entity(vehToRelease).state
 
         while hardLimit > 0 and DoesEntityExist(vehToRelease) do
-            if Entity(vehToRelease).state.parkingbrake then break end
+            -- ⚡ Bolt: Use cached vehState to reduce GC pressure from Entity() wrapper creation on every tick
+            if vehState.parkingbrake then break end
             if not NetworkHasControlOfEntity(vehToRelease) then break end
             if not IsVehicleSeatFree(vehToRelease, -1) then break end
 
             local speed = GetEntitySpeed(vehToRelease)
             local pitch = GetEntityPitch(vehToRelease)
+            -- ⚡ Bolt: Cache math.abs calculation used multiple times
+            local absPitch = math.abs(pitch)
 
             SetVehicleHandbrake(vehToRelease, false)
             SetVehicleBrake(vehToRelease, false)
@@ -48,13 +52,13 @@ local function startRollingPhysics(vehToRelease)
             if speed > Config.Physics.MinSpeed then hasBeenMoving = true end
 
 
-            if math.abs(pitch) > Config.Physics.MinPitch and speed < 15.0 then
-                local forceAmount = math.min(Config.Physics.BaseForce + (math.abs(pitch) * Config.Physics.PitchMultiplier), Config.Physics.MaxForce)
+            if absPitch > Config.Physics.MinPitch and speed < 15.0 then
+                local forceAmount = math.min(Config.Physics.BaseForce + (absPitch * Config.Physics.PitchMultiplier), Config.Physics.MaxForce)
                 local force = (pitch > 0 and -forceAmount or forceAmount)
                 ApplyForceToEntity(vehToRelease, 1, 0.0, force, 0.0, 0.0, 0.0, 0.0, 0, true, true, true, false, true)
             end
 
-            if hasBeenMoving and speed < Config.Physics.MinSpeed and math.abs(pitch) < 1.0 then break end
+            if hasBeenMoving and speed < Config.Physics.MinSpeed and absPitch < 1.0 then break end
 
             if speed < 0.8 then
                 stuckTimer = stuckTimer + 1
