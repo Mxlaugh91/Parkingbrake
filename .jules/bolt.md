@@ -1,0 +1,3 @@
+## 2024-02-28 - Optimizing FiveM State Bag Loop Access
+**Learning:** In FiveM Lua, calling `Entity(entityId).state` creates wrapper objects (specifically, a new table with a metatable for `StateBagInterface`), causing garbage collection pressure when called repeatedly in tight loops (like a 50ms while loop for custom physics).
+**Action:** When evaluating an entity's state bag repeatedly in a loop, lift the `Entity(ent).state` lookup to a variable outside the loop (`local state = Entity(ent).state`) and then evaluate the specific property (`state.property_name`) inside the loop. Additionally, cache repeated mathematical calculations like `math.abs(pitch)` inside the loop if they are used multiple times in the same tick.
