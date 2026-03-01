@@ -34,8 +34,11 @@ local function startRollingPhysics(vehToRelease)
         local stuckTimer = 0
         local hardLimit = Config.Physics.MaxRollTime
 
+        -- ⚡ Bolt: Hoist state bag evaluation to avoid GC pressure in tight loop
+        local vehState = Entity(vehToRelease).state
+
         while hardLimit > 0 and DoesEntityExist(vehToRelease) do
-            if Entity(vehToRelease).state.parkingbrake then break end
+            if vehState.parkingbrake then break end
             if not NetworkHasControlOfEntity(vehToRelease) then break end
             if not IsVehicleSeatFree(vehToRelease, -1) then break end
 
