@@ -159,14 +159,14 @@ lib.addKeybind({
 
             if success then
                 lastToggleTime = GetGameTimer()
-                TriggerServerEvent('qbx_parkingbrake:server:toggle')
+                lib.callback.await('qbx_parkingbrake:server:toggle', false)
             end
 
             isActivelyHolding = false
         else
 
             lastToggleTime = GetGameTimer()
-            TriggerServerEvent('qbx_parkingbrake:server:toggle')
+            lib.callback.await('qbx_parkingbrake:server:toggle', false)
         end
     end,
     onReleased = function()
