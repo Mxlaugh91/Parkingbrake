@@ -1,0 +1,3 @@
+## 2024-05-15 - [FiveM Lua] StateBag GC Pressure & Native Crossings
+**Learning:** In FiveM Lua, evaluating `Entity(id).state` inside tight loops (like physics threads or Wait(0) loops) causes significant garbage collection pressure due to `StateBagInterface` wrapper creation. Additionally, calling persistent natives like `SetVehicleHandbrake` every tick creates unnecessary native boundary overhead.
+**Action:** Always hoist state objects (e.g., `local state = Entity(id).state`) and persistent native setters outside of high-frequency loops. Only read the needed properties from the hoisted state object inside the loop.
