@@ -1,0 +1,4 @@
+## 2024-05-24 - Server-Side Validation Bypass in NetEvents
+**Vulnerability:** Cheaters could bypass client-side checks (speed, vehicle class, health, disabled state) by directly triggering `qbx_parkingbrake:server:toggle` via mod menus.
+**Learning:** Client-side validation is insufficient for secure event handling in FiveM. Natives like `GetEntitySpeed` and `GetVehicleClass` must be mirrored safely on the server using OneSync.
+**Prevention:** Always use `lib.callback.register` for sensitive actions and mirror all client-side condition checks on the server-side, using safe-checks for potentially missing server natives (e.g., `GetEntitySubmergedLevel`).
