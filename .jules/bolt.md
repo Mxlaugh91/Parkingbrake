@@ -1,0 +1,3 @@
+## 2024-05-24 - State Bag Evaluation in Tight Loops
+**Learning:** Evaluating `Entity(id).state` inside tight loops causes significant garbage collection pressure due to StateBagInterface wrapper creation. Additionally, persistent natives like `SetVehicleHandbrake` and `SetVehicleBrake` should be minimized to avoid native boundary crossings.
+**Action:** Always hoist `Entity(id).state` to a local variable outside of tight loops (e.g., `local state = Entity(id).state`). Move persistent native calls outside the loop if possible, or guard them by conditional checks to avoid redundant execution every tick.
