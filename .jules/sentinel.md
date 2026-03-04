@@ -1,0 +1,4 @@
+## 2024-05-28 - Unprotected network events lacking server-side validation
+**Vulnerability:** The client triggered `qbx_parkingbrake:server:toggle` using `TriggerServerEvent`, and the server blindly toggled the state with only driver checks, lacking client-side checks like vehicle speed, submersion, attachment, and excluded classes. This allowed a malicious client to bypass the UI/logic constraints and apply the brake on moving or disabled vehicles.
+**Learning:** Always use `lib.callback.register` / `lib.callback.await` for state changes. Ensure all client-side validation logic is accurately mirrored on the server side to prevent clients from bypassing logic.
+**Prevention:** Avoid relying exclusively on client-side state validation. Hoist common validation logic into shared config or repeat it server-side. Use callbacks rather than unprotected `RegisterNetEvent` for user-triggered state mutations.
