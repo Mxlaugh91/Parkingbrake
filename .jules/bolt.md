@@ -1,0 +1,3 @@
+## 2024-05-24 - [Optimize physics loop state and native calls]
+**Learning:** In FiveM Lua, evaluating `Entity(id).state` inside tight loops causes significant garbage collection pressure due to StateBagInterface wrapper creation. Additionally, calling persistent state natives like `SetVehicleHandbrake` and `SetVehicleBrake` every tick inside a physics loop incurs expensive native boundary crossings.
+**Action:** Hoist the state object evaluation outside the loop (`local state = Entity(id).state`) and use the hoisted variable. Move persistent native calls outside the loop or guard them with conditional checks to minimize native execution.
