@@ -15,6 +15,19 @@ RegisterNetEvent('qbx_parkingbrake:server:toggle', function()
     -- Validation: Is player actually the driver?
     if veh == 0 or GetPedInVehicleSeat(veh, -1) ~= ped then return end
 
+    -- Security Validation: Mirror client-side checks to prevent exploits
+    if GetEntityHealth(ped) <= 0 then return end
+
+    local vehClass = GetVehicleClass(veh)
+    if Config.ExcludedClasses[vehClass] then return end
+
+    if GetEntitySpeed(veh) > 1 then return end
+
+    if Config.EnableStateChecks then
+        if GetEntitySubmergedLevel and GetEntitySubmergedLevel(veh) >= Config.WaterThreshold then return end
+        if IsEntityAttached and IsEntityAttached(veh) then return end
+    end
+
     -- Toggle state
     local currentState = Entity(veh).state.parkingbrake
     Entity(veh).state:set('parkingbrake', not currentState, true)
