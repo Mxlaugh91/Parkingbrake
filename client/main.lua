@@ -34,16 +34,18 @@ local function startRollingPhysics(vehToRelease)
         local stuckTimer = 0
         local hardLimit = Config.Physics.MaxRollTime
 
+        -- Cache state and set physics natives once before loop to reduce GC pressure and native boundary overhead
+        local state = Entity(vehToRelease).state
+        SetVehicleHandbrake(vehToRelease, false)
+        SetVehicleBrake(vehToRelease, false)
+
         while hardLimit > 0 and DoesEntityExist(vehToRelease) do
-            if Entity(vehToRelease).state.parkingbrake then break end
+            if state.parkingbrake then break end
             if not NetworkHasControlOfEntity(vehToRelease) then break end
             if not IsVehicleSeatFree(vehToRelease, -1) then break end
 
             local speed = GetEntitySpeed(vehToRelease)
             local pitch = GetEntityPitch(vehToRelease)
-
-            SetVehicleHandbrake(vehToRelease, false)
-            SetVehicleBrake(vehToRelease, false)
 
             if speed > Config.Physics.MinSpeed then hasBeenMoving = true end
 
