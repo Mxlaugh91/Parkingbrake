@@ -1,0 +1,3 @@
+## 2024-05-28 - Minimize Native Crossings and State Wrappers in FiveM Loops
+**Learning:** In FiveM Lua, calling `Entity(id).state` creates a new `StateBagInterface` wrapper on each invocation, causing massive garbage collection pressure if called inside tight loops (like physics calculations running every tick). Additionally, persistent native calls (like `SetVehicleHandbrake`) inside a loop cause unnecessary native boundary crossing overhead.
+**Action:** When working on high-frequency loops, hoist the `state` object (`local state = Entity(id).state`) before the loop. Evaluate the state properties inside the loop (`if state.property`). Similarly, move any persistent physics native setups that don't need continuous ticking outside the loop.
